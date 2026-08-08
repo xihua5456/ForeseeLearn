@@ -1,0 +1,19 @@
+{
+  "forgetting_curve": {
+    "base_decay": 0.1,
+    "difficulty_multiplier": 0.2
+  },
+  "learning_efficiency": {
+    "base_rate": 0.15,
+    "fatigue_decay": 0.05
+  },
+  "time_allocation": {
+    "min_task_minutes": 15,
+    "max_task_minutes": 120,
+    "balance_new_old": 0.7
+  },
+  "optimization": {
+    "horizon_days": 7,
+    "max_iterations": 100
+  }
+}

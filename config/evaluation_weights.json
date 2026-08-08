@@ -1,0 +1,12 @@
+{
+  "daily_assessment": {
+    "accuracy_weight": 0.6,
+    "self_rating_weight": 0.3,
+    "completion_weight": 0.1
+  },
+  "long_term_tracking": {
+    "consistency_bonus": 0.2,
+    "improvement_rate": 0.3,
+    "knowledge_coverage": 0.5
+  }
+}

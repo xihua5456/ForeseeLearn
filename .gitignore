@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# 环境/编辑器
+.venv/
+venv/
+.idea/
+.vscode/
+*.iml
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# WorkBuddy 工作记忆(不属于项目源码)
+.workbuddy/

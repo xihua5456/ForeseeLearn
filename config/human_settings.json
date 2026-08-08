@@ -1,0 +1,22 @@
+{
+  "rest_schedule": {
+    "weekly_rest_days": [0, 6],
+    "daily_break_minutes": 10,
+    "break_after_minutes": 90
+  },
+  "difficulty_adaptation": {
+    "auto_adjust": true,
+    "min_difficulty_threshold": 0.4,
+    "max_difficulty_threshold": 0.8
+  },
+  "motivation_system": {
+    "enable_streak_tracking": true,
+    "enable_achievements": true,
+    "daily_goal_minimum": 30
+  },
+  "flexibility": {
+    "allow_plan_modification": true,
+    "emergency_break_minutes": 30,
+    "stress_relief_mode": false
+  }
+}
