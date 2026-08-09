@@ -18,5 +18,11 @@
     "allow_plan_modification": true,
     "emergency_break_minutes": 30,
     "stress_relief_mode": false
+  },
+  "learning_path": {
+    "enable_review": true,
+    "target_mastery": 0.6,
+    "advance_threshold": 0.6,
+    "default_daily_minutes": 60
   }
 }

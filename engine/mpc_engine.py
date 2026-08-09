@@ -24,7 +24,7 @@ class MPCEngine:
         
     def update_mastery_state(self, current_state: Dict[str, float], 
                             record: Dict) -> Dict[str, float]:
-        """根据学习记录更新知识点掌握度 - 调整学习进度"""
+        """按学习记录更新掌握度：正确率/自评 → 难度 → 增益"""
         knowledge = record.get('knowledge_point', '')
         study_time = record.get('actual_minutes', 0)
         
@@ -58,7 +58,7 @@ class MPCEngine:
                            initial_state: Dict[str, float],
                            difficulty_map: Dict[str, float],
                            total_time_budget: int) -> float:
-        """计算优化目标：预测期间总掌握度提升"""
+        """计算优化目标：预测期总掌握度提升（超时惩罚）"""
         current_state = initial_state.copy()
         total_improvement = 0
         
@@ -119,7 +119,7 @@ class MPCEngine:
                      current_state: Dict[str, float],
                      difficulty_map: Dict[str, float],
                      daily_time_budget: int) -> List[Dict[str, int]]:
-        """MPC滚动优化：生成最优学习计划"""
+        """MPC 滚动优化：随机扰动迭代，保留更优计划"""
         total_budget = daily_time_budget * self.horizon
         
         initial_plan = self.generate_heuristic_plan(knowledge_list, current_state, total_budget)
@@ -159,7 +159,7 @@ class MPCEngine:
                               current_state: Dict[str, float],
                               difficulty_map: Dict[str, float],
                               daily_time_budget: int) -> Dict[str, int]:
-        """生成明日学习计划 - 智能分配当天学习任务"""
+        """生成明日计划：取 7 天优化结果的第一天"""
         optimized_plan = self.optimize_plan(knowledge_list, current_state,
                                            difficulty_map, daily_time_budget)
         return optimized_plan[0] if optimized_plan else {}

@@ -7,6 +7,8 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from data.data_manager import DataManager
 from models.predictors import KnowledgeStatePredictor, PerformancePredictor
+from models.fuzzy_controller import FuzzyController
+from models.learning_path import LearningPath
 from engine.mpc_engine import MPCEngine
 from utils.config_loader import load_all_configs, flatten_knowledge_structure, calculate_difficulty_map
 
@@ -38,14 +40,11 @@ WEAK_POINT_THRESHOLD = 0.3      # 薄弱点掌握度上限
 # 自动优化参数
 AUTO_OPT_MIN_RECORDS = 7        # 至少几天记录
 AUTO_OPT_RECENT_WINDOW = 7      # 查看最近 N 条
-ACCURACY_HIGH = 0.8             # 正确率高 → 加速
-ACCURACY_LOW = 0.5              # 正确率低 → 减速
 LEARN_RATE_MAX = 0.25           # 学习率上限
 LEARN_RATE_MIN = 0.1            # 学习率下限
-LEARN_RATE_STEP = 0.02          # 学习率调整步长
 BALANCE_MAX = 0.9               # 新旧平衡上限
 BALANCE_MIN = 0.5               # 新旧平衡下限
-BALANCE_STEP = 0.05             # 新旧平衡调整步长
+BALANCE_TO_RATE_RATIO = 2.5     # 新旧平衡调整量 = 学习率调整量 × 该比例
 COMPLETION_LOW = 0.7            # 完成率低 → 缩减任务
 TASK_MAX_MIN = 60               # 任务时长下限
 TASK_MAX_STEP = 15              # 任务时长缩减步长
@@ -67,6 +66,9 @@ class LearningOptimizationSystem:
         )
         
         self.knowledge_list = flatten_knowledge_structure(self.configs['knowledge_structure'])
+        self.learning_path = LearningPath(
+            self.knowledge_list, self.configs, self.data_manager, self.knowledge_predictor
+        )
         
     def add_learning_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """添加学习记录 - 返回 {success, message}"""
@@ -91,7 +93,7 @@ class LearningOptimizationSystem:
         self.data_manager.save_knowledge_state(new_state)
         
     def evaluate_daily_performance(self, date: str = None) -> Dict[str, Any]:
-        """评估单日学习表现 - 当天无记录时返回 {date, message}"""
+        """评估单日表现 - 当天无记录时返回 {date, message}"""
         if date is None:
             date = datetime.now().strftime('%Y-%m-%d')
             
@@ -134,7 +136,7 @@ class LearningOptimizationSystem:
         }
         
     def generate_tomorrow_plan(self, daily_time_budget: int) -> Dict[str, Any]:
-        """生成明日学习计划 - 智能分配学习时间"""
+        """生成明日计划 - 用 MPC 引擎按优先级排任务"""
         current_state = self.data_manager.load_knowledge_state()
         records = self.data_manager.load_records()
         difficulty_map = calculate_difficulty_map(records)
@@ -174,7 +176,7 @@ class LearningOptimizationSystem:
         }
         
     def get_knowledge_status(self) -> Dict[str, Any]:
-        """获取所有知识点当前状态 - 显示学习进度"""
+        """获取所有知识点状态 - 掌握度映射为 未开始/学习中/掌握/熟练"""
         state = self.data_manager.load_knowledge_state()
         
         status_list = []
@@ -226,7 +228,7 @@ class LearningOptimizationSystem:
             return {'success': False, 'message': f'更新失败: {str(e)}'}
             
     def get_learning_insights(self) -> Dict[str, Any]:
-        """获取学习洞察和建议 - 分析学习趋势并给出建议"""
+        """学习洞察：趋势判断 + 薄弱/优势点 + 个性化建议"""
         records = self.data_manager.load_records()
         state = self.data_manager.load_knowledge_state()
         
@@ -274,7 +276,7 @@ class LearningOptimizationSystem:
         }
         
     def auto_optimize_parameters(self) -> Dict[str, Any]:
-        """自动优化模型参数 - 根据学习效果调整系统参数"""
+        """自动优化模型参数 - 模糊控制器根据表现偏差量平滑调节"""
         records = self.data_manager.load_records()
         
         if len(records) < AUTO_OPT_MIN_RECORDS:
@@ -287,15 +289,30 @@ class LearningOptimizationSystem:
         
         new_params = self.configs['model_params'].copy()
         
-        if avg_accuracy > ACCURACY_HIGH:
-            new_params['learning_efficiency']['base_rate'] = min(LEARN_RATE_MAX, new_params['learning_efficiency']['base_rate'] + LEARN_RATE_STEP)
-            new_params['time_allocation']['balance_new_old'] = min(BALANCE_MAX, new_params['time_allocation']['balance_new_old'] + BALANCE_STEP)
-        elif avg_accuracy < ACCURACY_LOW:
-            new_params['learning_efficiency']['base_rate'] = max(LEARN_RATE_MIN, new_params['learning_efficiency']['base_rate'] - LEARN_RATE_STEP)
-            new_params['time_allocation']['balance_new_old'] = max(BALANCE_MIN, new_params['time_allocation']['balance_new_old'] - BALANCE_STEP)
-            
-        if avg_completion < COMPLETION_LOW:
-            new_params['time_allocation']['max_task_minutes'] = max(TASK_MAX_MIN, new_params['time_allocation']['max_task_minutes'] - TASK_MAX_STEP)
+        # 模糊控制器：偏差量越大调节越多，无硬边界
+        fuzzy = FuzzyController()
+        adjustment = fuzzy.tune(avg_accuracy, avg_completion)
+        rate_delta = adjustment['rate_delta']
+        task_reduction = adjustment['task_reduction']
+        
+        # 学习率：按模糊偏差量平滑调整，并夹在上下限内
+        base_rate = new_params['learning_efficiency']['base_rate']
+        new_params['learning_efficiency']['base_rate'] = min(
+            LEARN_RATE_MAX, max(LEARN_RATE_MIN, base_rate + rate_delta)
+        )
+        
+        # 新旧平衡：学得好多学新内容（与学习率同向小幅调整）
+        balance = new_params['time_allocation']['balance_new_old']
+        balance_delta = rate_delta * BALANCE_TO_RATE_RATIO
+        new_params['time_allocation']['balance_new_old'] = min(
+            BALANCE_MAX, max(BALANCE_MIN, balance + balance_delta)
+        )
+        
+        # 完成率低 → 减负（平滑缩短单任务时长）
+        new_params['time_allocation']['max_task_minutes'] = max(
+            TASK_MAX_MIN,
+            new_params['time_allocation']['max_task_minutes'] - task_reduction
+        )
             
         result = self.update_config('model_params', new_params)
         
@@ -303,6 +320,46 @@ class LearningOptimizationSystem:
             **result,
             'changes': {
                 'old_accuracy': round(avg_accuracy, 3),
-                'new_learning_rate': new_params['learning_efficiency']['base_rate']
+                'old_learning_rate': round(base_rate, 4),
+                'new_learning_rate': round(new_params['learning_efficiency']['base_rate'], 4),
+                'rate_delta': rate_delta,
             }
         }
+        
+    # ---------- 学习路径模式 ----------
+        
+    def get_learning_path_status(self) -> Dict[str, Any]:
+        """查看当前学习单元 + 达标所需时间 + 复习建议"""
+        unit = self.learning_path.get_current_unit()
+        if unit['is_done']:
+            return {'message': '所有单元都已达标，学习完成！'}
+            
+        # 计算难度（用该知识点的历史难度，无则默认 0.5）
+        records = self.data_manager.load_records()
+        difficulty_map = calculate_difficulty_map(records)
+        difficulty = difficulty_map.get(unit['knowledge'], 0.5)
+        
+        estimate = self.learning_path.estimate_time_to_target(
+            unit['knowledge'], unit['current_mastery'], difficulty
+        )
+        reviews = self.learning_path.get_review_suggestions()
+        
+        return {
+            'current_unit': unit['knowledge'],
+            'current_mastery': unit['current_mastery'],
+            'target_mastery': unit['target_mastery'],
+            'estimated_minutes': estimate['minutes'],
+            'difficulty': difficulty,
+            'review_suggestions': reviews,
+        }
+        
+    def advance_learning_path(self) -> Dict[str, Any]:
+        """检查当前单元是否达标，达标则自动推进"""
+        unit = self.learning_path.get_current_unit()
+        if unit['is_done']:
+            return {'message': '所有单元都已达标，无需推进'}
+        return self.learning_path.advance(unit['knowledge'])
+        
+    def skip_learning_unit(self, knowledge: str) -> Dict[str, Any]:
+        """手动跳过某单元：掌握度设为目标值，推进到下一单元"""
+        return self.learning_path.skip(knowledge)

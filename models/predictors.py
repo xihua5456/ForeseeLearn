@@ -28,14 +28,14 @@ class KnowledgeStatePredictor:
         self.fatigue_decay = params.get('learning_efficiency', {}).get('fatigue_decay', 0.05)
         
     def predict_forgetting(self, current_mastery: float, difficulty: float, days: int) -> float:
-        """预测遗忘后的掌握度"""
+        """指数衰减模拟遗忘：不复习则掌握度随时间衰减"""
         decay = self.forget_base + (self.forget_diff * difficulty)
         decayed_mastery = current_mastery * math.exp(-decay * days)
         return max(0, min(1, decayed_mastery))
         
     def predict_learning_gain(self, current_mastery: float, study_time: float, 
                              difficulty: float, fatigue: float = 0) -> float:
-        """预测学习收益"""
+        """学习收益：学得越久涨越多，但受难度/疲劳/已掌握度打折"""
         effective_time = study_time * (1 - fatigue * self.fatigue_decay)
         difficulty_factor = 1 - (difficulty - MID_DIFFICULTY) * DIFFICULTY_SLOPE  # 难度调整
         learning_potential = (1 - current_mastery) * difficulty_factor
@@ -73,7 +73,7 @@ class PerformancePredictor:
         return score, feedback
         
     def predict_future_performance(self, historical_scores: list) -> Dict[str, float]:
-        """预测未来表现趋势"""
+        """趋势预测：对比近期与整体均值，判断上升/下降/稳定"""
         if len(historical_scores) < TREND_MIN_RECORDS:
             return {'trend': 'data_insufficient', 'expected_score': 0.5}
             

@@ -84,6 +84,62 @@ def test_system():
     else:
         print(f"   洞察结果: {insights.get('message', '正常')}")
 
+    print("\n7. 测试模糊控制器...")
+    from models.fuzzy_controller import FuzzyController
+    fuzzy = FuzzyController()
+
+    # 7.1 偏差量越大，调节幅度越大（你要求的核心特性）
+    r_terrible = fuzzy.tune(0.2, 1.0)['rate_delta']   # 严重低于目标 → 大幅下调
+    r_bad      = fuzzy.tune(0.55, 1.0)['rate_delta']  # 略低 → 小幅下调
+    r_ok       = fuzzy.tune(0.7, 1.0)['rate_delta']   # 正好目标 → 几乎不动
+    r_good     = fuzzy.tune(0.85, 1.0)['rate_delta']  # 略高 → 小幅上调
+    r_excellent = fuzzy.tune(0.95, 1.0)['rate_delta'] # 很高 → 大幅上调
+
+    assert r_terrible <= r_bad <= r_ok <= r_good <= r_excellent, \
+        f"调节幅度应随偏差单调变化: {r_terrible} {r_bad} {r_ok} {r_good} {r_excellent}"
+    assert abs(r_ok) < 0.005, f"目标点附近应几乎不动: {r_ok}"
+    assert r_excellent > 0.01, f"大幅偏差应大幅调节: {r_excellent}"
+    print(f"   偏差调节验证: 差0.2→{r_terrible} 差0.55→{r_bad} 目标→{r_ok} 好0.85→{r_good} 好0.95→{r_excellent}")
+
+    # 7.2 平滑性：边界两侧调节量应接近（无硬跳变）
+    a = fuzzy.tune(0.69, 1.0)['rate_delta']
+    b = fuzzy.tune(0.71, 1.0)['rate_delta']
+    assert abs(a - b) < 0.005, f"边界两侧应平滑过渡: {a} vs {b}"
+    print(f"   平滑性验证: 0.69→{a}  0.71→{b}（差异 {abs(a-b):.4f} < 0.005）")
+
+    # 7.3 完成率低 → 减负
+    task_red = fuzzy.tune(0.7, 0.5)['task_reduction']
+    assert task_red >= 10, f"完成率低应明显减负: {task_red}"
+    print(f"   减负验证: 完成率0.5 → 任务减 {task_red} 分钟")
+
+    print("\n8. 测试学习路径...")
+    # 8.1 定位当前单元（第一个未达标的）
+    status = system.get_learning_path_status()
+    assert 'current_unit' in status, "应返回当前单元"
+    assert status['estimated_minutes'] > 0, "达标时间应为正数"
+    print(f"   当前单元: {status['current_unit']} 掌握度 {status['current_mastery']} 需 {status['estimated_minutes']} 分钟")
+
+    # 8.2 手动跳过 → 掌握度设为目标值并推进
+    skip_result = system.skip_learning_unit(status['current_unit'])
+    assert skip_result['success'] is True, "跳过应成功"
+    assert skip_result['mastery_set'] == 0.6, f"跳过应设掌握度为0.6: {skip_result['mastery_set']}"
+    state = system.data_manager.load_knowledge_state()
+    assert state.get(status['current_unit'], 0) >= 0.6, "跳过单元掌握度应达标"
+    print(f"   跳过验证: {skip_result['message']}")
+
+    # 8.3 推进逻辑：已达标单元应推进
+    adv = system.advance_learning_path()
+    print(f"   推进验证: {adv['message']}")
+
+    # 8.4 跳过日志已记录
+    import json as _json
+    log_file = system.data_manager.base_path + "/data/cache/skipped_log.json"
+    assert os.path.exists(log_file), "跳过日志应存在"
+    with open(log_file, encoding='utf-8') as f:
+        log = _json.load(f)
+    assert len(log['skips']) >= 1, "应至少有一条跳过记录"
+    print(f"   日志验证: 已记录 {len(log['skips'])} 条跳过记录")
+
     print("\n=== 测试通过 ===")
     return True
 

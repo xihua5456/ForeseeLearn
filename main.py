@@ -21,19 +21,20 @@ def print_menu():
     print("5. 获取学习建议")
     print("6. 自动优化参数")
     print("7. 修改配置")
+    print("8. 学习路径")
     print("0. 退出")
     print("="*50)
 
 def get_user_choice():
     """获取用户选择"""
     try:
-        choice = input("\n请选择功能 (0-7): ").strip()
+        choice = input("\n请选择功能 (0-8): ").strip()
         return int(choice) if choice.isdigit() else None
     except (EOFError, KeyboardInterrupt):
         return None
 
 def record_learning(system):
-    """记录学习"""
+    """录入一条今日学习记录（知识点、时长、题数、自评）"""
     print("\n--- 记录今日学习 ---")
     knowledge = input("知识点名称: ").strip()
     
@@ -62,7 +63,7 @@ def record_learning(system):
     print(f"\n{result['message']}")
 
 def show_evaluation(system):
-    """显示评价"""
+    """查看某天的学习评价（默认今天）"""
     print("\n--- 今日学习评价 ---")
     date = input("日期(YYYY-MM-DD，留空则今日): ").strip() or None
     result = system.evaluate_daily_performance(date)
@@ -82,7 +83,7 @@ def show_evaluation(system):
         print(f"    建议: {detail['feedback']}")
 
 def generate_plan(system):
-    """生成计划"""
+    """按明日可用时间生成学习任务清单"""
     print("\n--- 生成明日学习计划 ---")
     try:
         time_budget = int(input("明日可用学习时间(分钟): "))
@@ -166,9 +167,76 @@ def auto_optimize(system):
     if result['success']:
         print(f"\n{result['message']}")
         print(f"平均正确率: {result['changes']['old_accuracy']:.3f}")
-        print(f"新学习率: {result['changes']['new_learning_rate']:.3f}")
+        print(f"学习率调整量: {result['changes']['rate_delta']:+.4f}（模糊偏差调节）")
+        print(f"旧学习率: {result['changes']['old_learning_rate']:.4f}")
+        print(f"新学习率: {result['changes']['new_learning_rate']:.4f}")
     else:
         print(f"\n{result['message']}")
+
+def learning_path_mode(system):
+    """学习路径模式"""
+    while True:
+        print("\n--- 学习路径 ---")
+        status = system.get_learning_path_status()
+        
+        if 'message' in status:
+            print(status['message'])
+            return
+            
+        print(f"\n当前单元: {status['current_unit']}")
+        print(f"掌握度: {status['current_mastery']:.2f} / 目标: {status['target_mastery']}")
+        print(f"预估达标还需: {status['estimated_minutes']} 分钟")
+        print(f"难度系数: {status['difficulty']:.2f}")
+        
+        if status['review_suggestions']:
+            print("\n建议复习（遗忘风险）:")
+            for item in status['review_suggestions']:
+                print(f"  {item['knowledge']}（掌握度 {item['mastery']:.2f}）")
+        
+        print("\n选择操作:")
+        print("  1. 学习当前单元并记录")
+        print("  2. 手动跳过当前单元")
+        print("  3. 检查并推进")
+        print("  0. 返回主菜单")
+        
+        choice = input("选择 (0-3): ").strip()
+        
+        if choice == '0':
+            return
+        elif choice == '1':
+            # 复用记录学习逻辑（填当前单元的信息）
+            knowledge = status['current_unit']
+            try:
+                planned = int(input(f"计划时长(分钟, 建议{status['estimated_minutes']}): ") or status['estimated_minutes'])
+                actual = int(input("实际时长(分钟): "))
+                questions = int(input("题目数量: "))
+                correct = int(input("正确数量: "))
+                rating = int(input("自评分数(1-5): "))
+            except ValueError:
+                print("输入错误，请输入数字")
+                continue
+            
+            record = {
+                'date': datetime.now().strftime('%Y-%m-%d'),
+                'knowledge_point': knowledge,
+                'planned_minutes': planned,
+                'actual_minutes': actual,
+                'question_count': questions,
+                'correct_count': correct,
+                'self_rating': rating,
+                'notes': input("备注(可选): ").strip()
+            }
+            result = system.add_learning_record(record)
+            print(f"\n{result['message']}")
+            # 学完自动检查是否达标推进
+            adv = system.advance_learning_path()
+            print(adv['message'])
+        elif choice == '2':
+            result = system.skip_learning_unit(status['current_unit'])
+            print(f"\n{result['message']}")
+        elif choice == '3':
+            adv = system.advance_learning_path()
+            print(f"\n{adv['message']}")
 
 def modify_config(system):
     """修改配置"""
@@ -238,6 +306,8 @@ def main():
             auto_optimize(system)
         elif choice == 7:
             modify_config(system)
+        elif choice == 8:
+            learning_path_mode(system)
         else:
             print("无效选择，请重新输入")
 
