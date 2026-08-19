@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForeseeLearn 学习助手</title>
+<style>
+  :root {
+    --primary: #185FA5;
+    --green: #0F6E56;
+    --orange: #BA7517;
+    --gray: #888780;
+    --bg: #f5f6f8;
+    --card: #ffffff;
+    --text: #2c2c2a;
+  }
+  [data-theme="dark"] {
+    --bg: #1a1b1e;
+    --card: #26272b;
+    --text: #e8e8e6;
+    --gray: #9a9a96;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: var(--bg); color: var(--text);
+    transition: background .3s, color .3s;
+  }
+  .topbar {
+    background: linear-gradient(135deg, var(--primary), var(--green));
+    color: #fff; padding: 18px 32px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .topbar h1 { font-size: 20px; }
+  .topbar .sub { font-size: 12px; opacity: .85; margin-top: 2px; }
+  .theme-btn {
+    background: rgba(255,255,255,.2); border: none; color: #fff;
+    padding: 8px 16px; border-radius: 20px; cursor: pointer; font-size: 13px;
+  }
+  .container { max-width: 1000px; margin: 0 auto; padding: 24px 20px; }
+  .card {
+    background: var(--card); border-radius: 14px; padding: 20px 24px;
+    margin-bottom: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.06);
+    transition: background .3s;
+  }
+  .card h2 {
+    font-size: 15px; margin-bottom: 14px; color: var(--primary);
+    border-left: 4px solid var(--primary); padding-left: 10px;
+  }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+  .stat { background: var(--bg); border-radius: 10px; padding: 14px; text-align: center; }
+  .stat .num { font-size: 22px; font-weight: 600; }
+  .stat .label { font-size: 12px; color: var(--gray); margin-top: 4px; }
+  .bar { height: 10px; background: #e5e5e3; border-radius: 5px; overflow: hidden; margin-top: 12px; }
+  .bar-fill { height: 100%; border-radius: 5px; background: linear-gradient(90deg, var(--primary), var(--green)); transition: width .5s; }
+  .subject { margin-bottom: 16px; }
+  .subject-name { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .chapter { margin: 8px 0 4px; font-size: 13px; color: var(--gray); }
+  .points { display: flex; flex-wrap: wrap; gap: 8px; }
+  .point { padding: 5px 11px; border-radius: 20px; font-size: 12px; color: #fff; cursor: pointer; }
+  label { display: block; font-size: 13px; color: var(--gray); margin: 10px 0 4px; }
+  input, select {
+    width: 100%; padding: 9px 12px; border: 1px solid #d8d8d4; border-radius: 8px;
+    font-size: 14px; background: var(--bg); color: var(--text);
+  }
+  .row { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+  .btn {
+    background: var(--primary); color: #fff; border: none; padding: 10px 18px;
+    border-radius: 8px; font-size: 14px; cursor: pointer; margin-top: 12px;
+  }
+  .btn:hover { opacity: .9; }
+  .btn.green { background: var(--green); }
+  .btn.orange { background: var(--orange); }
+  .btn.ghost { background: transparent; color: var(--primary); border: 1px solid var(--primary); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #eee; }
+  th { color: var(--gray); font-weight: 500; }
+  .msg { padding: 10px 14px; border-radius: 8px; margin-top: 12px; font-size: 13px; display: none; }
+  .msg.ok { display: block; background: #e8f5ee; color: var(--green); }
+  .msg.err { display: block; background: #fdeeee; color: #a32d2d; }
+  .review { background: #fff8e6; border-left: 4px solid var(--orange); padding: 8px 12px; border-radius: 6px; margin: 6px 0; font-size: 13px; }
+  .unit-big { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+  .day-plan { border: 1px solid #e5e5e3; border-radius: 10px; padding: 12px; margin-bottom: 8px; }
+  .day-plan .day-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; color: var(--primary); }
+  .task-chip { display: inline-block; background: var(--bg); padding: 4px 10px; border-radius: 14px; font-size: 12px; margin: 3px; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <div>
+    <h1>ForeseeLearn 学习助手</h1>
+    <div class="sub">基于 MPC + 模糊控制 · 网页可视化版</div>
+  </div>
+  <button class="theme-btn" onclick="toggleTheme()">🌓 切换主题</button>
+</div>
+
+<div class="container">
+  <!-- 学习进度总览 -->
+  <div class="card">
+    <h2>学习进度总览</h2>
+    <div class="grid" id="overviewStats">
+      <div class="stat"><div class="num" id="totalPoints">-</div><div class="label">知识点总数</div></div>
+      <div class="stat"><div class="num" id="masteredCount">-</div><div class="label">已达标 (≥0.6)</div></div>
+      <div class="stat"><div class="num" id="avgMastery">-</div><div class="label">平均掌握度</div></div>
+    </div>
+    <div class="bar"><div class="bar-fill" id="masteryBar" style="width:0%"></div></div>
+  </div>
+
+  <!-- 当前学习单元 -->
+  <div class="card">
+    <h2>当前学习单元</h2>
+    <div id="currentUnitArea"><p style="color:var(--gray)">加载中...</p></div>
+  </div>
+
+  <!-- 记录学习 -->
+  <div class="card">
+    <h2>记录今日学习</h2>
+    <div class="row">
+      <div>
+        <label>知识点</label>
+        <select id="recordPoint"></select>
+      </div>
+      <div>
+        <label>计划时长(分钟)</label>
+        <input type="number" id="plannedMin" value="60">
+      </div>
+      <div>
+        <label>实际时长(分钟)</label>
+        <input type="number" id="actualMin" value="45">
+      </div>
+      <div>
+        <label>题目数量</label>
+        <input type="number" id="questionCount" value="10">
+      </div>
+      <div>
+        <label>正确数量</label>
+        <input type="number" id="correctCount" value="8">
+      </div>
+      <div>
+        <label>自评(1-5)</label>
+        <input type="number" id="selfRating" value="4" min="1" max="5">
+      </div>
+    </div>
+    <button class="btn" onclick="submitRecord()">保存记录</button>
+    <div class="msg" id="recordMsg"></div>
+  </div>
+
+  <!-- 截止日期规划 -->
+  <div class="card">
+    <h2>截止日期规划（倒排工期）</h2>
+    <div class="row">
+      <div>
+        <label>截止日期</label>
+        <input type="date" id="deadlineDate">
+      </div>
+      <div>
+        <label>每日可用时间(分钟)</label>
+        <input type="number" id="dailyMinutes" value="60">
+      </div>
+    </div>
+    <div style="margin-top:12px;">
+      <button class="btn green" onclick="fillAllPoints()">一键填入全部知识点</button>
+      <button class="btn orange" onclick="generateDeadlinePlan()" style="margin-left:8px;">生成规划</button>
+    </div>
+    <div id="pointsSelection" style="margin-top:12px;"></div>
+    <div class="msg" id="planMsg"></div>
+    <div id="planResult" style="margin-top:12px;"></div>
+  </div>
+
+  <!-- 知识点地图 -->
+  <div class="card">
+    <h2>知识点地图</h2>
+    <div id="knowledgeMap"></div>
+  </div>
+
+  <!-- 最近学习记录 -->
+  <div class="card">
+    <h2>最近学习记录</h2>
+    <table>
+      <thead><tr><th>日期</th><th>知识点</th><th>计划/实际</th><th>正确率</th><th>自评</th></tr></thead>
+      <tbody id="recentRecords"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 知识点编辑弹窗：手动调掌握度 + 重要度等级 -->
+<div id="editModal" style="display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.45);z-index:999;justify-content:center;align-items:center;">
+  <div class="card" style="width:340px;margin:0;">
+    <h2>编辑知识点</h2>
+    <div id="modalPointName" style="font-size:16px;font-weight:600;margin-bottom:12px;"></div>
+    <label>掌握度：<span id="masteryValue" style="color:var(--primary);font-weight:600;">0%</span></label>
+    <input type="range" id="masterySlider" min="0" max="100" value="0" style="width:100%;margin-top:6px;" oninput="updateMasteryLabel()">
+    <label style="margin-top:16px;">重要程度</label>
+    <div style="display:flex;gap:8px;">
+      <button class="btn" id="impCore" style="flex:1;padding:8px;" onclick="setImpLevel('core')">★ 核心</button>
+      <button class="btn ghost" id="impNormal" style="flex:1;padding:8px;" onclick="setImpLevel('normal')">普通</button>
+      <button class="btn ghost" id="impOptional" style="flex:1;padding:8px;" onclick="setImpLevel('optional')">☆ 拓展</button>
+    </div>
+    <div class="msg" id="modalMsg"></div>
+    <button class="btn green" style="width:100%;" onclick="saveEditModal()">保存</button>
+    <button class="btn ghost" style="width:100%;" onclick="closeEditModal()">取消</button>
+  </div>
+</div>
+
+<script>
+// ---------- 工具 ----------
+async function api(url, method='GET', body=null) {
+  const opts = { method, headers: {} };
+  if (body) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
+  const res = await fetch(url, opts);
+  return res.json();
+}
+
+function masteryColor(m) {
+  if (m >= 0.8) return '#0F6E56';
+  if (m >= 0.5) return '#185FA5';
+  if (m >= 0.2) return '#BA7517';
+  return '#B4B2A9';
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+// ---------- 主题 ----------
+function toggleTheme() {
+  const cur = document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', cur === 'dark' ? 'light' : 'dark');
+}
+
+// ---------- 仪表盘 ----------
+async function loadOverview() {
+  const data = await api('/api/overview');
+  document.getElementById('totalPoints').textContent = data.total_points;
+  document.getElementById('masteredCount').textContent = data.mastered;
+  document.getElementById('avgMastery').textContent = (data.avg_mastery * 100).toFixed(0) + '%';
+  document.getElementById('masteryBar').style.width = (data.avg_mastery * 100).toFixed(0) + '%';
+
+  // 当前单元
+  const unitArea = document.getElementById('currentUnitArea');
+  if (data.current_unit) {
+    const u = data.current_unit;
+    let html = `<div class="unit-big">${escapeHtml(u.current_unit)}</div>`;
+    html += `<div class="row">
+      <div class="stat"><div class="num" style="color:var(--primary)">${(u.current_mastery*100).toFixed(0)}%</div><div class="label">当前掌握度</div></div>
+      <div class="stat"><div class="num" style="color:var(--green)">${u.target_mastery*100}%</div><div class="label">目标</div></div>
+      <div class="stat"><div class="num" style="color:var(--orange)">${u.estimated_minutes}分</div><div class="label">预估达标</div></div>
+    </div>`;
+    if (u.review_suggestions && u.review_suggestions.length) {
+      html += '<div style="margin-top:10px;">';
+      u.review_suggestions.forEach(r => { html += `<div class="review">📌 建议复习：${escapeHtml(r.knowledge)}（掌握度 ${(r.mastery*100).toFixed(0)}%）</div>`; });
+      html += '</div>';
+    }
+    html += `<button class="btn ghost" onclick="skipCurrent()" style="margin-top:10px;">跳过当前单元</button>`;
+    unitArea.innerHTML = html;
+  } else {
+    unitArea.innerHTML = '<p style="color:var(--gray)">所有单元都已达标，学习完成！</p>';
+  }
+
+  // 知识点地图
+  const mapEl = document.getElementById('knowledgeMap');
+  const impLabel = { core: '★', normal: '', optional: '☆' };
+  const impTitle = { core: '核心', normal: '普通', optional: '拓展' };
+  let mapHtml = '';
+  data.map.forEach(subject => {
+    mapHtml += `<div class="subject"><div class="subject-name">${escapeHtml(subject.subject)}</div>`;
+    subject.chapters.forEach(ch => {
+      mapHtml += `<div class="chapter">${escapeHtml(ch.name)}</div><div class="points">`;
+      ch.points.forEach(p => {
+        const star = impLabel[p.importance] || '';
+        mapHtml += `<span class="point" style="background:${masteryColor(p.mastery)};cursor:pointer"
+          title="${escapeHtml(p.name)}（${impTitle[p.importance]||'普通'}）点击可调节" onclick="openEditModal('${escapeHtml(p.name)}', ${p.mastery}, '${p.importance||'normal'}')">
+          ${star}${escapeHtml(p.name)} ${(p.mastery*100).toFixed(0)}%</span>`;
+      });
+      mapHtml += '</div>';
+    });
+    mapHtml += '</div>';
+  });
+  mapEl.innerHTML = mapHtml;
+
+  // 最近记录
+  const tbody = document.getElementById('recentRecords');
+  if (data.recent_records.length) {
+    tbody.innerHTML = data.recent_records.map(r => `<tr>
+      <td>${escapeHtml(r.date)}</td><td>${escapeHtml(r.knowledge)}</td>
+      <td>${r.planned}/${r.actual}分</td><td>${(r.accuracy*100).toFixed(0)}%</td>
+      <td>${r.self_rating}/5</td></tr>`).join('');
+  } else {
+    tbody.innerHTML = '<tr><td colspan="5" style="color:var(--gray);text-align:center">还没有学习记录</td></tr>';
+  }
+}
+
+// ---------- 记录学习 ----------
+async function loadPoints() {
+  const data = await api('/api/knowledge');
+  const select = document.getElementById('recordPoint');
+  select.innerHTML = data.knowledge_list.map(k => `<option value="${escapeHtml(k)}">${escapeHtml(k)}</option>`).join('');
+  return data.knowledge_list;
+}
+
+async function submitRecord() {
+  const record = {
+    date: new Date().toISOString().slice(0, 10),
+    knowledge_point: document.getElementById('recordPoint').value,
+    planned_minutes: +document.getElementById('plannedMin').value,
+    actual_minutes: +document.getElementById('actualMin').value,
+    question_count: +document.getElementById('questionCount').value,
+    correct_count: +document.getElementById('correctCount').value,
+    self_rating: +document.getElementById('selfRating').value,
+    notes: ''
+  };
+  const result = await api('/api/record', 'POST', record);
+  const msg = document.getElementById('recordMsg');
+  msg.textContent = result.message;
+  msg.className = 'msg ' + (result.success ? 'ok' : 'err');
+  loadOverview();
+}
+
+async function skipCurrent() {
+  const data = await api('/api/overview');
+  if (!data.current_unit) return;
+  const result = await api('/api/skip', 'POST', { knowledge: data.current_unit.current_unit });
+  const msg = document.getElementById('recordMsg');
+  msg.textContent = result.message;
+  msg.className = 'msg ok';
+  loadOverview();
+}
+
+// ---------- 截止日期规划 ----------
+let allPoints = [];
+let selectedPoints = new Set();
+
+function fillAllPoints() {
+  selectedPoints = new Set(allPoints);
+  renderPointsSelection();
+  document.getElementById('deadlineDate').value = new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
+}
+
+function renderPointsSelection() {
+  const el = document.getElementById('pointsSelection');
+  el.innerHTML = '<div style="display:flex;flex-wrap:wrap;gap:8px;">' +
+    allPoints.map(k => {
+      const checked = selectedPoints.has(k) ? 'checked' : '';
+      return `<label style="display:flex;align-items:center;gap:4px;margin:0;padding:4px 8px;background:var(--bg);border-radius:16px;font-size:12px;cursor:pointer;">
+        <input type="checkbox" ${checked} onchange="togglePoint('${escapeHtml(k).replace(/'/g, "\\'")}')"> ${escapeHtml(k)}
+      </label>`;
+    }).join('') + '</div>';
+}
+
+function togglePoint(name) {
+  if (selectedPoints.has(name)) selectedPoints.delete(name);
+  else selectedPoints.add(name);
+}
+
+async function generateDeadlinePlan() {
+  const deadline = document.getElementById('deadlineDate').value;
+  const daily = +document.getElementById('dailyMinutes').value;
+  if (!deadline) { alert('请先选择截止日期'); return; }
+  if (!selectedPoints.size) { alert('请先勾选要完成的知识点（或点"一键填入全部"）'); return; }
+
+  const result = await api('/api/deadline_plan', 'POST', {
+    deadline, daily_minutes: daily, points: [...selectedPoints]
+  });
+  const msg = document.getElementById('planMsg');
+  msg.textContent = result.message;
+  msg.className = 'msg ' + (result.success ? 'ok' : 'err');
+
+  const resultEl = document.getElementById('planResult');
+  if (result.success && result.plan && result.plan.length) {
+    resultEl.innerHTML = '<h3 style="font-size:14px;margin-bottom:10px;">📅 逐日计划</h3>' +
+      result.plan.map(d => {
+        const tasks = d.tasks.map(t => `<span class="task-chip">${escapeHtml(t.knowledge)} ${t.minutes}分</span>`).join('');
+        return `<div class="day-plan"><div class="day-title">第 ${d.day} 天 · ${d.date}（${d.total} 分钟）</div>${tasks}</div>`;
+      }).join('');
+  } else {
+    resultEl.innerHTML = '';
+  }
+}
+
+// ---------- 知识点编辑弹窗 ----------
+let editPoint = { name: '', mastery: 0, level: 'normal' };
+
+function openEditModal(name, mastery, level) {
+  editPoint = { name, mastery, level: level || 'normal' };
+  document.getElementById('modalPointName').textContent = name;
+  document.getElementById('masterySlider').value = Math.round(mastery * 100);
+  updateMasteryLabel();
+  highlightImpLevel(editPoint.level);
+  document.getElementById('modalMsg').className = 'msg';
+  document.getElementById('modalMsg').textContent = '';
+  const modal = document.getElementById('editModal');
+  modal.style.display = 'flex';
+}
+
+function closeEditModal() {
+  document.getElementById('editModal').style.display = 'none';
+}
+
+function updateMasteryLabel() {
+  const v = document.getElementById('masterySlider').value;
+  document.getElementById('masteryValue').textContent = v + '%';
+}
+
+function highlightImpLevel(level) {
+  const map = { core: 'impCore', normal: 'impNormal', optional: 'impOptional' };
+  ['impCore', 'impNormal', 'impOptional'].forEach(id => {
+    const btn = document.getElementById(id);
+    if (id === map[level]) { btn.classList.remove('ghost'); }
+    else { btn.classList.add('ghost'); }
+  });
+}
+
+function setImpLevel(level) {
+  editPoint.level = level;
+  highlightImpLevel(level);
+}
+
+async function saveEditModal() {
+  const mastery = document.getElementById('masterySlider').value / 100;
+  const r1 = await api('/api/set_mastery', 'POST', { knowledge: editPoint.name, mastery });
+  const r2 = await api('/api/set_importance', 'POST', { knowledge: editPoint.name, level: editPoint.level });
+  const msg = document.getElementById('modalMsg');
+  msg.textContent = r1.message + '；' + r2.message;
+  msg.className = 'msg ok';
+  closeEditModal();
+  loadOverview();
+}
+
+// ---------- 初始化 ----------
+(async function init() {
+  await loadOverview();
+  allPoints = await loadPoints();
+  document.getElementById('deadlineDate').value = new Date(Date.now() + 14*86400000).toISOString().slice(0,10);
+})();
+</script>
+</body>
+</html>

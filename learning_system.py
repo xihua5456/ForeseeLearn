@@ -57,6 +57,9 @@ class LearningOptimizationSystem:
         self.data_manager = DataManager(base_path)
         self.configs = load_all_configs(base_path)
         
+        # 知识重要度配置（core/normal/optional → 优先级系数）
+        self._load_importance_config()
+        
         self.knowledge_predictor = KnowledgeStatePredictor(self.configs['model_params'])
         self.performance_predictor = PerformancePredictor(self.configs['evaluation_weights'])
         self.mpc_engine = MPCEngine(
@@ -69,6 +72,47 @@ class LearningOptimizationSystem:
         self.learning_path = LearningPath(
             self.knowledge_list, self.configs, self.data_manager, self.knowledge_predictor
         )
+
+    def _load_importance_config(self):
+        """加载知识重要度配置（不存在时全部按普通级处理）"""
+        import json as _json
+        path = os.path.join(self.base_path, 'config', 'knowledge_importance.json')
+        self.importance_map = {}  # 知识点 → 等级名
+        self.importance_levels = {'core': 1.5, 'normal': 1.0, 'optional': 0.6}
+        try:
+            with open(path, 'r', encoding='utf-8') as f:
+                data = _json.load(f)
+            self.importance_map = data.get('knowledge_importance', {})
+            self.importance_levels = data.get('levels', self.importance_levels)
+        except (FileNotFoundError, _json.JSONDecodeError):
+            pass
+
+    def get_importance_factor(self, knowledge: str) -> float:
+        """返回知识点的重要度系数（1.5核心 / 1.0普通 / 0.6拓展）"""
+        level = self.importance_map.get(knowledge, 'normal')
+        return self.importance_levels.get(level, 1.0)
+
+    def set_knowledge_importance(self, knowledge: str, level: str) -> Dict[str, Any]:
+        """手动设置知识点重要度等级"""
+        import json as _json
+        if level not in self.importance_levels:
+            return {'success': False, 'message': f'无效等级: {level}（可选: core/normal/optional）'}
+        self.importance_map[knowledge] = level
+        path = os.path.join(self.base_path, 'config', 'knowledge_importance.json')
+        data = {'levels': self.importance_levels, 'knowledge_importance': self.importance_map}
+        with open(path, 'w', encoding='utf-8') as f:
+            _json.dump(data, f, ensure_ascii=False, indent=2)
+        return {'success': True, 'message': f'「{knowledge}」重要度已设为 {level}'}
+
+    def set_mastery_manually(self, knowledge: str, mastery: float) -> Dict[str, Any]:
+        """手动调节知识点掌握度（纠偏系统计算误差）"""
+        mastery = float(mastery)
+        if not (0 <= mastery <= 1):
+            return {'success': False, 'message': '掌握度必须在 0~1 之间'}
+        state = self.data_manager.load_knowledge_state()
+        state[knowledge] = mastery
+        self.data_manager.save_knowledge_state(state)
+        return {'success': True, 'message': f'「{knowledge}」掌握度已手动设为 {mastery:.2f}'}
         
     def add_learning_record(self, record: Dict[str, Any]) -> Dict[str, Any]:
         """添加学习记录 - 返回 {success, message}"""
@@ -157,13 +201,15 @@ class LearningOptimizationSystem:
         for knowledge, time in plan.items():
             current_mastery = current_state.get(knowledge, 0.0)
             difficulty = difficulty_map.get(knowledge, 0.5)
-            priority = (1 - current_mastery) * (PRIORITY_NEW_CONTENT_WEIGHT + PRIORITY_DIFFICULTY_WEIGHT * difficulty)
+            importance = self.get_importance_factor(knowledge)
+            priority = (1 - current_mastery) * (PRIORITY_NEW_CONTENT_WEIGHT + PRIORITY_DIFFICULTY_WEIGHT * difficulty) * importance
             
             plan_details.append({
                 'knowledge': knowledge,
                 'planned_minutes': time,
                 'current_mastery': round(current_mastery, 3),
                 'difficulty': round(difficulty, 3),
+                'importance': round(importance, 2),
                 'priority': round(priority, 3)
             })
             

@@ -1,0 +1,36 @@
+{
+  "levels": {
+    "core": 1.5,
+    "normal": 1.0,
+    "optional": 0.6
+  },
+  "knowledge_importance": {
+    "一元二次方程": "core",
+    "函数与图像": "core",
+    "不等式": "normal",
+    "平面几何基础": "normal",
+    "三角函数": "core",
+    "立体几何": "normal",
+    "排列组合": "normal",
+    "概率基础": "normal",
+    "统计图表": "optional",
+    "高频词汇": "core",
+    "词根词缀": "normal",
+    "同义词辨析": "optional",
+    "时态语态": "core",
+    "从句结构": "normal",
+    "非谓语动词": "normal",
+    "长难句分析": "optional",
+    "阅读技巧": "normal",
+    "题型分类": "optional",
+    "数据类型": "normal",
+    "控制流程": "normal",
+    "函数定义": "core",
+    "排序算法": "core",
+    "搜索算法": "normal",
+    "动态规划": "normal",
+    "数组链表": "normal",
+    "树图结构": "optional",
+    "哈希表": "normal"
+  }
+}

@@ -22,13 +22,14 @@ def print_menu():
     print("6. 自动优化参数")
     print("7. 修改配置")
     print("8. 学习路径")
+    print("9. 生成学习网页")
     print("0. 退出")
     print("="*50)
 
 def get_user_choice():
     """获取用户选择"""
     try:
-        choice = input("\n请选择功能 (0-8): ").strip()
+        choice = input("\n请选择功能 (0-9): ").strip()
         return int(choice) if choice.isdigit() else None
     except (EOFError, KeyboardInterrupt):
         return None
@@ -273,6 +274,22 @@ def modify_config(system):
     except json.JSONDecodeError:
         print("JSON格式错误")
 
+def generate_web_report(system):
+    """一键生成学习网页并打开"""
+    import webbrowser
+    from web_report import generate_report
+    
+    print("\n--- 生成学习网页 ---")
+    try:
+        path = generate_report(system)
+        print(f"已生成: {path}")
+        # 自动用浏览器打开（用户可手动选择）
+        if input("是否用浏览器打开？(y/n): ").strip().lower() == 'y':
+            webbrowser.open('file:///' + path.replace('\\', '/'))
+            print("已打开浏览器")
+    except Exception as e:
+        print(f"生成失败: {e}")
+
 def main():
     """主函数"""
     base_path = os.path.dirname(os.path.abspath(__file__))
@@ -308,6 +325,8 @@ def main():
             modify_config(system)
         elif choice == 8:
             learning_path_mode(system)
+        elif choice == 9:
+            generate_web_report(system)
         else:
             print("无效选择，请重新输入")
 
